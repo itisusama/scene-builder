@@ -150,6 +150,86 @@
     text-align: center;
   }
 
+  /* ---------- Character placeholders panel ---------- */
+  .char-panel {
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-height: 0;
+    max-height: 45%;
+  }
+
+  .char-hint {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    padding: 0 16px 8px;
+    line-height: 1.6;
+  }
+
+  .char-hint code {
+    background: var(--bg-panel-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--accent);
+  }
+
+  .char-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    padding: 0 8px 10px;
+  }
+
+  .char-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 2px;
+  }
+
+  .char-input {
+    min-width: 0;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 12.5px;
+    padding: 6px 8px;
+    transition: border-color 0.15s;
+  }
+
+  .char-input:focus { outline: none; border-color: var(--accent); }
+
+  .char-input.char-tag {
+    flex: 0.8;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--accent);
+  }
+
+  .char-input.char-name { flex: 1; }
+
+  .empty-chars {
+    font-size: 12px;
+    color: var(--text-faint);
+    padding: 4px 10px 8px;
+    line-height: 1.5;
+  }
+
+  .sidebar-foot {
+    border-top: 1px solid var(--border);
+    padding: 10px 12px;
+    flex-shrink: 0;
+  }
+
+  #downloadAllBtn { width: 100%; justify-content: center; }
+
+  .preview-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
   /* ---------- Editor ---------- */
   .editor {
     flex: 1;
@@ -432,7 +512,7 @@
     .app { flex-direction: column; overflow-y: auto; }
     .sidebar {
       width: 100%;
-      max-height: 220px;
+      max-height: 45vh;
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
@@ -457,6 +537,19 @@
       <button class="btn btn-accent btn-sm" id="addSceneBtn" title="Create a new scene">+ New</button>
     </div>
     <ul class="scene-list" id="sceneList"></ul>
+
+    <div class="char-panel">
+      <div class="sidebar-head">
+        <span>Characters</span>
+        <button class="btn btn-accent btn-sm" id="addCharBtn" title="Add a character placeholder">+ Add</button>
+      </div>
+      <p class="char-hint">Reference as <code>{Tag}</code> or <code>[Tag]</code> in requirements — the assigned name resolves in preview, copy &amp; export.</p>
+      <ul class="char-list" id="charList"></ul>
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="btn" id="downloadAllBtn" title="Download every scene as one markdown file">&#11015; Download All Scenes (.md)</button>
+    </div>
   </aside>
 
   <main class="editor" id="editor">
@@ -468,7 +561,10 @@
     <section class="preview" id="previewPane">
       <div class="preview-head">
         <span>Live Preview</span>
-        <button class="btn btn-sm" id="copySceneBtn" title="Copy scene as markdown">&#128203; Copy Scene</button>
+        <div class="preview-actions">
+          <button class="btn btn-sm" id="copySceneBtn" title="Copy scene as markdown">&#128203; Copy Scene</button>
+          <button class="btn btn-sm" id="downloadSceneBtn" title="Download this scene as a .md file">&#11015; Download (.md)</button>
+        </div>
       </div>
       <div class="preview-body">
         <div id="previewContent"></div>
@@ -491,6 +587,7 @@
 
   let state = {
     scenes: [],       // [{ id, name, requirements: [{ id, text }] }]
+    characters: [],   // [{ id, tag, name }] — {tag} / [tag] in text resolves to name
     selectedId: null
   };
 
@@ -516,6 +613,16 @@
               : []
           };
         });
+        state.characters = Array.isArray(parsed.characters)
+          ? parsed.characters.filter(function (c) { return c && typeof c.id === 'string'; })
+              .map(function (c) {
+                return {
+                  id: c.id,
+                  tag: typeof c.tag === 'string' ? c.tag : '',
+                  name: typeof c.name === 'string' ? c.name : ''
+                };
+              })
+          : [];
         state.selectedId = parsed.selectedId || null;
       }
     } catch (e) {
@@ -551,6 +658,10 @@
   const addSceneBtn   = document.getElementById('addSceneBtn');
   const copySceneBtn  = document.getElementById('copySceneBtn');
   const toastEl       = document.getElementById('toast');
+  const charListEl    = document.getElementById('charList');
+  const addCharBtn    = document.getElementById('addCharBtn');
+  const downloadSceneBtn = document.getElementById('downloadSceneBtn');
+  const downloadAllBtn   = document.getElementById('downloadAllBtn');
 
   /* ------------------------------------------------------------------ *
    *  Rendering
@@ -558,6 +669,7 @@
   function render() {
     renderSceneList();
     renderWorkspace();
+    renderCharacters();
     renderPreview();
   }
 
@@ -790,6 +902,123 @@
     textarea.style.height = textarea.scrollHeight + 'px';
   }
 
+  /* ------------------------------------------------------------------ *
+   *  Character placeholders
+   * ------------------------------------------------------------------ */
+  function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Replaces {Tag} / [Tag] (case-insensitive, whitespace-tolerant) with the
+  // character's assigned name. Unassigned or unknown tags pass through as-is,
+  // so the underlying template link in the requirement text stays intact.
+  function resolvePlaceholders(text) {
+    let out = text;
+    state.characters.forEach(function (ch) {
+      const tag = (ch.tag || '').trim();
+      const name = (ch.name || '').trim();
+      if (!tag || !name) return;
+      const re = new RegExp('[{\\[]\\s*' + escapeRe(tag) + '\\s*[}\\]]', 'gi');
+      out = out.replace(re, function () { return name; });
+    });
+    return out;
+  }
+
+  function renderCharacters() {
+    charListEl.innerHTML = '';
+
+    if (!state.characters.length) {
+      const li = document.createElement('li');
+      li.className = 'empty-chars';
+      li.textContent = 'No characters yet. Add placeholder slots like "Protagonist" or "Male", then assign real names.';
+      charListEl.appendChild(li);
+      return;
+    }
+
+    state.characters.forEach(function (ch) {
+      const li = document.createElement('li');
+      li.className = 'char-row';
+
+      const tagInput = document.createElement('input');
+      tagInput.type = 'text';
+      tagInput.className = 'char-input char-tag';
+      tagInput.value = ch.tag;
+      tagInput.placeholder = 'Tag';
+      tagInput.title = 'Placeholder tag — write {' + (ch.tag || 'Tag') + '} in requirements';
+      tagInput.setAttribute('aria-label', 'Placeholder tag');
+      // Commit on change (blur/Enter), not per keystroke — renaming the tag
+      // rewrites every requirement that references it, and doing that on
+      // half-typed tags would corrupt the text.
+      tagInput.addEventListener('change', function () {
+        renameTag(ch, tagInput.value.trim());
+      });
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'char-input char-name';
+      nameInput.value = ch.name;
+      nameInput.placeholder = 'Assigned name…';
+      nameInput.setAttribute('aria-label', 'Assigned character name');
+      nameInput.addEventListener('input', function () {
+        ch.name = nameInput.value;
+        save();
+        renderPreview();
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'req-remove';
+      removeBtn.innerHTML = '&#10005;';
+      removeBtn.title = 'Remove character (tags in text are kept)';
+      removeBtn.setAttribute('aria-label', 'Remove character');
+      removeBtn.addEventListener('click', function () {
+        state.characters = state.characters.filter(function (c) { return c.id !== ch.id; });
+        save();
+        renderCharacters();
+        renderPreview();
+      });
+
+      li.appendChild(tagInput);
+      li.appendChild(nameInput);
+      li.appendChild(removeBtn);
+      charListEl.appendChild(li);
+    });
+  }
+
+  function addCharacter() {
+    state.characters.push({
+      id: uid(),
+      tag: 'Character ' + (state.characters.length + 1),
+      name: ''
+    });
+    save();
+    renderCharacters();
+    const rows = charListEl.querySelectorAll('.char-tag');
+    const last = rows[rows.length - 1];
+    if (last) { last.focus(); last.select(); }
+  }
+
+  // Renames a tag and rewrites {old} / [old] references in every scene so
+  // existing requirements keep pointing at the same character slot.
+  function renameTag(ch, newTag) {
+    const oldTag = (ch.tag || '').trim();
+    if (newTag === oldTag) return;
+    ch.tag = newTag;
+    if (oldTag && newTag) {
+      const re = new RegExp('([{\\[])\\s*' + escapeRe(oldTag) + '\\s*([}\\]])', 'gi');
+      const rewrite = function (m, open, close) { return open + newTag + close; };
+      state.scenes.forEach(function (scene) {
+        if (typeof scene.name === 'string') {
+          scene.name = scene.name.replace(re, rewrite);
+        }
+        scene.requirements.forEach(function (req) {
+          req.text = req.text.replace(re, rewrite);
+        });
+      });
+    }
+    save();
+    render();
+  }
+
   function renderPreview() {
     const scene = currentScene();
     if (!scene) {
@@ -860,11 +1089,11 @@
    *  Export / copy
    * ------------------------------------------------------------------ */
   function compileScene(scene) {
-    const name = (scene.name || '').trim();
+    const name = resolvePlaceholders((scene.name || '').trim());
     const lines = [];
     if (name) lines.push('# ' + name);
     const reqs = scene.requirements
-      .map(function (r) { return r.text.trim(); })
+      .map(function (r) { return resolvePlaceholders(r.text).trim(); })
       .filter(Boolean);
     if (reqs.length) {
       if (lines.length) lines.push('');
@@ -902,6 +1131,52 @@
     }
   }
 
+  /* ------------------------------------------------------------------ *
+   *  Markdown download
+   * ------------------------------------------------------------------ */
+  function slugify(name) {
+    return (name || '').trim().toLowerCase()
+      .replace(/[^\w\s-]+/g, '')
+      .trim()
+      .replace(/\s+/g, '-') || 'scene';
+  }
+
+  function downloadFile(filename, content) {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function downloadScene() {
+    const scene = currentScene();
+    if (!scene) return;
+    const text = compileScene(scene);
+    if (!text) {
+      showToast('Nothing to download — the scene is empty.');
+      return;
+    }
+    downloadFile(slugify(resolvePlaceholders(scene.name)) + '.md', text + '\n');
+    showToast('Scene downloaded as .md');
+  }
+
+  function downloadAllScenes() {
+    const parts = state.scenes
+      .map(function (s) { return compileScene(s); })
+      .filter(Boolean);
+    if (!parts.length) {
+      showToast('Nothing to download — no scenes with content yet.');
+      return;
+    }
+    downloadFile('all-scenes.md', parts.join('\n\n---\n\n') + '\n');
+    showToast(parts.length + ' scene(s) downloaded as .md');
+  }
+
   function legacyCopy(text, done) {
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -931,6 +1206,9 @@
    * ------------------------------------------------------------------ */
   addSceneBtn.addEventListener('click', addScene);
   copySceneBtn.addEventListener('click', copyScene);
+  addCharBtn.addEventListener('click', addCharacter);
+  downloadSceneBtn.addEventListener('click', downloadScene);
+  downloadAllBtn.addEventListener('click', downloadAllScenes);
 
   load();
   render();
