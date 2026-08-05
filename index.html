@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scene Builder</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-panel: #161a22;
+    --bg-panel-2: #1c212c;
+    --bg-hover: #232937;
+    --border: #2a3040;
+    --text: #e6e9f0;
+    --text-dim: #9aa3b5;
+    --text-faint: #6b7488;
+    --accent: #7aa2f7;
+    --accent-soft: rgba(122, 162, 247, 0.14);
+    --danger: #f7768e;
+    --danger-soft: rgba(247, 118, 142, 0.12);
+    --success: #9ece6a;
+    --radius: 10px;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  header h1 .logo { color: var(--accent); margin-right: 8px; }
+
+  header .tagline {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+
+  /* ---------- Layout ---------- */
+  .app {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sidebar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+  }
+
+  .sidebar-head span {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+
+  .scene-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 8px 12px;
+  }
+
+  .scene-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .scene-item:hover { background: var(--bg-hover); color: var(--text); }
+
+  .scene-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: rgba(122, 162, 247, 0.25);
+  }
+
+  .scene-item .scene-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .scene-item .count {
+    font-size: 11px;
+    color: var(--text-faint);
+    background: var(--bg-panel-2);
+    border-radius: 10px;
+    padding: 1px 7px;
+    flex-shrink: 0;
+  }
+
+  .scene-item.active .count { color: var(--accent); }
+
+  .empty-scenes {
+    padding: 20px 18px;
+    font-size: 13px;
+    color: var(--text-faint);
+    line-height: 1.55;
+    text-align: center;
+  }
+
+  /* ---------- Editor ---------- */
+  .editor {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    min-height: 0;
+  }
+
+  .workspace {
+    flex: 1.15;
+    min-width: 0;
+    padding: 26px 30px;
+    overflow-y: auto;
+  }
+
+  .placeholder {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 20px;
+  }
+
+  .placeholder .big { font-size: 40px; opacity: 0.5; }
+  .placeholder p { font-size: 14px; line-height: 1.6; max-width: 320px; }
+
+  .scene-name-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  #sceneNameInput {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 22px;
+    font-weight: 600;
+    padding: 8px 10px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  #sceneNameInput:hover { border-color: var(--border); }
+  #sceneNameInput:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-panel);
+  }
+
+  .section-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin: 18px 0 10px;
+  }
+
+  /* ---------- Requirements list ---------- */
+  .req-list { list-style: none; }
+
+  .req-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    transition: border-color 0.15s, box-shadow 0.2s, transform 0.15s, opacity 0.2s;
+  }
+
+  .req-item:focus-within { border-color: var(--accent); }
+
+  .req-item.dragging {
+    opacity: 0.45;
+    transform: scale(0.99);
+    border-style: dashed;
+  }
+
+  .req-item.drag-over-top { box-shadow: 0 -3px 0 0 var(--accent); }
+  .req-item.drag-over-bottom { box-shadow: 0 3px 0 0 var(--accent); }
+
+  .drag-handle {
+    cursor: grab;
+    color: var(--text-faint);
+    padding: 6px 4px;
+    border-radius: 6px;
+    user-select: none;
+    line-height: 1;
+    font-size: 15px;
+    letter-spacing: -1px;
+    flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .drag-handle:hover { color: var(--accent); background: var(--accent-soft); }
+  .drag-handle:active { cursor: grabbing; }
+
+  .req-text {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    resize: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 5px 2px;
+    overflow: hidden;
+  }
+
+  .req-text:focus { outline: none; }
+  .req-text::placeholder { color: var(--text-faint); }
+
+  .req-remove {
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .req-remove:hover { color: var(--danger); background: var(--danger-soft); }
+
+  .empty-reqs {
+    color: var(--text-faint);
+    font-size: 13.5px;
+    padding: 14px 4px;
+    line-height: 1.5;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: var(--bg-hover); color: var(--text); }
+
+  .btn-accent {
+    background: var(--accent-soft);
+    border-color: rgba(122, 162, 247, 0.3);
+    color: var(--accent);
+  }
+
+  .btn-accent:hover { background: rgba(122, 162, 247, 0.22); color: var(--accent); }
+
+  .btn-danger-ghost:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: rgba(247, 118, 142, 0.3);
+  }
+
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .btn.copied {
+    background: rgba(158, 206, 106, 0.15);
+    border-color: rgba(158, 206, 106, 0.35);
+    color: var(--success);
+  }
+
+  #addReqBtn { margin-top: 4px; }
+
+  /* ---------- Preview pane ---------- */
+  .preview {
+    flex: 0.85;
+    min-width: 0;
+    border-left: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 10px;
+    flex-shrink: 0;
+    gap: 10px;
+  }
+
+  .preview-head span {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+
+  .preview-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 20px 24px;
+  }
+
+  #previewContent {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    min-height: 120px;
+  }
+
+  /* ---------- Scrollbars ---------- */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  /* ---------- Toast ---------- */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translate(-50%, 12px);
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 900px) {
+    .editor { flex-direction: column; overflow-y: auto; }
+    .workspace { flex: none; overflow-y: visible; padding: 20px; }
+    .preview {
+      flex: none;
+      border-left: none;
+      border-top: 1px solid var(--border);
+    }
+    .preview-body { overflow-y: visible; }
+  }
+
+  @media (max-width: 640px) {
+    .app { flex-direction: column; overflow-y: auto; }
+    .sidebar {
+      width: 100%;
+      max-height: 220px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .editor { overflow: visible; }
+    header { padding: 12px 16px; }
+    header .tagline { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="logo">&#9998;</span>Scene Builder</h1>
+  <span class="tagline">Plan your scenes, one beat at a time</span>
+</header>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span>Scenes</span>
+      <button class="btn btn-accent btn-sm" id="addSceneBtn" title="Create a new scene">+ New</button>
+    </div>
+    <ul class="scene-list" id="sceneList"></ul>
+  </aside>
+
+  <main class="editor" id="editor">
+
+    <section class="workspace" id="workspace">
+      <!-- Filled by render() -->
+    </section>
+
+    <section class="preview" id="previewPane">
+      <div class="preview-head">
+        <span>Live Preview</span>
+        <button class="btn btn-sm" id="copySceneBtn" title="Copy scene as markdown">&#128203; Copy Scene</button>
+      </div>
+      <div class="preview-body">
+        <div id="previewContent"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   *  State & persistence
+   * ------------------------------------------------------------------ */
+  const STORAGE_KEY = 'sceneBuilder.v1';
+
+  let state = {
+    scenes: [],       // [{ id, name, requirements: [{ id, text }] }]
+    selectedId: null
+  };
+
+  function uid() {
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.scenes)) {
+        state.scenes = parsed.scenes.filter(function (s) {
+          return s && typeof s.id === 'string';
+        }).map(function (s) {
+          return {
+            id: s.id,
+            name: typeof s.name === 'string' ? s.name : 'Untitled Scene',
+            requirements: Array.isArray(s.requirements)
+              ? s.requirements.filter(function (r) { return r && typeof r.id === 'string'; })
+                  .map(function (r) { return { id: r.id, text: typeof r.text === 'string' ? r.text : '' }; })
+              : []
+          };
+        });
+        state.selectedId = parsed.selectedId || null;
+      }
+    } catch (e) {
+      console.warn('Scene Builder: could not load saved data.', e);
+    }
+    if (state.selectedId && !getScene(state.selectedId)) state.selectedId = null;
+    if (!state.selectedId && state.scenes.length) state.selectedId = state.scenes[0].id;
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn('Scene Builder: could not save data.', e);
+    }
+  }
+
+  function getScene(id) {
+    return state.scenes.find(function (s) { return s.id === id; }) || null;
+  }
+
+  function currentScene() {
+    return getScene(state.selectedId);
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  DOM refs
+   * ------------------------------------------------------------------ */
+  const sceneListEl   = document.getElementById('sceneList');
+  const workspaceEl   = document.getElementById('workspace');
+  const previewEl     = document.getElementById('previewContent');
+  const previewPane   = document.getElementById('previewPane');
+  const addSceneBtn   = document.getElementById('addSceneBtn');
+  const copySceneBtn  = document.getElementById('copySceneBtn');
+  const toastEl       = document.getElementById('toast');
+
+  /* ------------------------------------------------------------------ *
+   *  Rendering
+   * ------------------------------------------------------------------ */
+  function render() {
+    renderSceneList();
+    renderWorkspace();
+    renderPreview();
+  }
+
+  function renderSceneList() {
+    sceneListEl.innerHTML = '';
+
+    if (!state.scenes.length) {
+      const li = document.createElement('li');
+      li.className = 'empty-scenes';
+      li.textContent = 'No scenes yet. Click "+ New" to start building your story.';
+      sceneListEl.appendChild(li);
+      return;
+    }
+
+    state.scenes.forEach(function (scene) {
+      const li = document.createElement('li');
+      li.className = 'scene-item' + (scene.id === state.selectedId ? ' active' : '');
+
+      const title = document.createElement('span');
+      title.className = 'scene-title';
+      title.textContent = scene.name || 'Untitled Scene';
+
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = scene.requirements.length;
+      count.title = scene.requirements.length + ' requirement(s)';
+
+      li.appendChild(title);
+      li.appendChild(count);
+
+      li.addEventListener('click', function () {
+        state.selectedId = scene.id;
+        save();
+        render();
+      });
+
+      sceneListEl.appendChild(li);
+    });
+  }
+
+  function renderWorkspace() {
+    const scene = currentScene();
+    workspaceEl.innerHTML = '';
+
+    if (!scene) {
+      previewPane.style.display = 'none';
+      const ph = document.createElement('div');
+      ph.className = 'placeholder';
+      ph.innerHTML =
+        '<div class="big">&#127916;</div>' +
+        '<p>Select a scene from the sidebar, or create a new one to start sketching out your requirements.</p>';
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-accent';
+      btn.textContent = '+ Create your first scene';
+      btn.addEventListener('click', addScene);
+      ph.appendChild(btn);
+      workspaceEl.appendChild(ph);
+      return;
+    }
+
+    previewPane.style.display = '';
+
+    // --- Scene name row ---
+    const nameRow = document.createElement('div');
+    nameRow.className = 'scene-name-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.id = 'sceneNameInput';
+    nameInput.value = scene.name;
+    nameInput.placeholder = 'Scene name…';
+    nameInput.setAttribute('aria-label', 'Scene name');
+    nameInput.addEventListener('input', function () {
+      scene.name = nameInput.value;
+      save();
+      renderSceneList();
+      renderPreview();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger-ghost btn-sm';
+    deleteBtn.innerHTML = '&#128465; Delete';
+    deleteBtn.title = 'Delete this scene';
+    deleteBtn.addEventListener('click', function () {
+      deleteScene(scene.id);
+    });
+
+    nameRow.appendChild(nameInput);
+    nameRow.appendChild(deleteBtn);
+    workspaceEl.appendChild(nameRow);
+
+    // --- Requirements section ---
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'Scene Requirements';
+    workspaceEl.appendChild(label);
+
+    const list = document.createElement('ul');
+    list.className = 'req-list';
+    list.id = 'reqList';
+
+    if (!scene.requirements.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty-reqs';
+      empty.textContent = 'No requirements yet — add plot goals, character motivations, atmospheric cues…';
+      list.appendChild(empty);
+    } else {
+      scene.requirements.forEach(function (req) {
+        list.appendChild(buildReqItem(scene, req));
+      });
+    }
+
+    workspaceEl.appendChild(list);
+
+    const addReqBtn = document.createElement('button');
+    addReqBtn.className = 'btn btn-accent';
+    addReqBtn.id = 'addReqBtn';
+    addReqBtn.textContent = '+ Add requirement';
+    addReqBtn.addEventListener('click', function () {
+      addRequirement(scene);
+    });
+    workspaceEl.appendChild(addReqBtn);
+  }
+
+  const dragState = { id: null };
+
+  function buildReqItem(scene, req) {
+    const li = document.createElement('li');
+    li.className = 'req-item';
+    li.dataset.reqId = req.id;
+
+    // Drag handle — only the handle arms dragging, so selecting text stays natural.
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.innerHTML = '&#8942;&#8942;';
+    handle.title = 'Drag to reorder';
+    handle.setAttribute('aria-label', 'Drag to reorder requirement');
+
+    handle.addEventListener('mousedown', function () { li.draggable = true; });
+    handle.addEventListener('touchstart', function () { li.draggable = true; }, { passive: true });
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'req-text';
+    textarea.rows = 1;
+    textarea.value = req.text;
+    textarea.placeholder = 'Describe this requirement…';
+    textarea.setAttribute('aria-label', 'Requirement text');
+    textarea.addEventListener('input', function () {
+      req.text = textarea.value;
+      autoGrow(textarea);
+      save();
+      renderPreview();
+    });
+    textarea.addEventListener('keydown', function (e) {
+      // Enter (without Shift) commits and jumps to a fresh requirement.
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        addRequirement(scene);
+      }
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'req-remove';
+    removeBtn.innerHTML = '&#10005;';
+    removeBtn.title = 'Remove requirement';
+    removeBtn.setAttribute('aria-label', 'Remove requirement');
+    removeBtn.addEventListener('click', function () {
+      scene.requirements = scene.requirements.filter(function (r) { return r.id !== req.id; });
+      save();
+      render();
+    });
+
+    li.appendChild(handle);
+    li.appendChild(textarea);
+    li.appendChild(removeBtn);
+
+    // ---- Drag & drop wiring ----
+    li.addEventListener('dragstart', function (e) {
+      dragState.id = req.id;
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', req.id); } catch (_) {}
+    });
+
+    li.addEventListener('dragend', function () {
+      li.classList.remove('dragging');
+      li.draggable = false;
+      dragState.id = null;
+      clearDropMarkers();
+    });
+
+    li.addEventListener('dragover', function (e) {
+      if (!dragState.id || dragState.id === req.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      clearDropMarkers();
+      li.classList.add(before ? 'drag-over-top' : 'drag-over-bottom');
+    });
+
+    li.addEventListener('dragleave', function (e) {
+      if (!li.contains(e.relatedTarget)) {
+        li.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
+    });
+
+    li.addEventListener('drop', function (e) {
+      if (!dragState.id || dragState.id === req.id) return;
+      e.preventDefault();
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      moveRequirement(scene, dragState.id, req.id, before);
+    });
+
+    // Auto-grow once mounted (needs to be in the DOM to measure scrollHeight).
+    requestAnimationFrame(function () { autoGrow(textarea); });
+
+    return li;
+  }
+
+  function clearDropMarkers() {
+    document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(function (el) {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+  }
+
+  function autoGrow(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+  }
+
+  function renderPreview() {
+    const scene = currentScene();
+    if (!scene) {
+      previewEl.textContent = '';
+      return;
+    }
+    previewEl.textContent = compileScene(scene) ||
+      '(empty scene — add a name and some requirements)';
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Actions
+   * ------------------------------------------------------------------ */
+  function addScene() {
+    const scene = {
+      id: uid(),
+      name: 'Untitled Scene ' + (state.scenes.length + 1),
+      requirements: []
+    };
+    state.scenes.push(scene);
+    state.selectedId = scene.id;
+    save();
+    render();
+    const input = document.getElementById('sceneNameInput');
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function deleteScene(id) {
+    const scene = getScene(id);
+    if (!scene) return;
+    const label = scene.name || 'Untitled Scene';
+    if (!confirm('Delete scene "' + label + '" and all its requirements?')) return;
+    state.scenes = state.scenes.filter(function (s) { return s.id !== id; });
+    if (state.selectedId === id) {
+      state.selectedId = state.scenes.length ? state.scenes[0].id : null;
+    }
+    save();
+    render();
+  }
+
+  function addRequirement(scene) {
+    const req = { id: uid(), text: '' };
+    scene.requirements.push(req);
+    save();
+    render();
+    // Focus the freshly created textarea. Deferred a frame so it wins over the
+    // blur fired when the previously focused textarea is torn down by render().
+    requestAnimationFrame(function () {
+      const item = document.querySelector('.req-item[data-req-id="' + req.id + '"] .req-text');
+      if (item) item.focus();
+    });
+  }
+
+  function moveRequirement(scene, draggedId, targetId, before) {
+    const reqs = scene.requirements;
+    const fromIdx = reqs.findIndex(function (r) { return r.id === draggedId; });
+    if (fromIdx === -1) return;
+    const dragged = reqs.splice(fromIdx, 1)[0];
+    let toIdx = reqs.findIndex(function (r) { return r.id === targetId; });
+    if (toIdx === -1) { reqs.splice(fromIdx, 0, dragged); return; }
+    if (!before) toIdx += 1;
+    reqs.splice(toIdx, 0, dragged);
+    save();
+    render();
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Export / copy
+   * ------------------------------------------------------------------ */
+  function compileScene(scene) {
+    const name = (scene.name || '').trim();
+    const lines = [];
+    if (name) lines.push('# ' + name);
+    const reqs = scene.requirements
+      .map(function (r) { return r.text.trim(); })
+      .filter(Boolean);
+    if (reqs.length) {
+      if (lines.length) lines.push('');
+      reqs.forEach(function (t) {
+        // Indent continuation lines of multi-line requirements under the bullet.
+        lines.push('- ' + t.replace(/\n/g, '\n  '));
+      });
+    }
+    return lines.join('\n');
+  }
+
+  function copyScene() {
+    const scene = currentScene();
+    if (!scene) return;
+    const text = compileScene(scene);
+    if (!text) {
+      showToast('Nothing to copy — the scene is empty.');
+      return;
+    }
+
+    function done() {
+      copySceneBtn.classList.add('copied');
+      copySceneBtn.innerHTML = '&#10003; Copied!';
+      showToast('Scene copied to clipboard');
+      setTimeout(function () {
+        copySceneBtn.classList.remove('copied');
+        copySceneBtn.innerHTML = '&#128203; Copy Scene';
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { legacyCopy(text, done); });
+    } else {
+      legacyCopy(text, done);
+    }
+  }
+
+  function legacyCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      done();
+    } catch (e) {
+      showToast('Copy failed — your browser blocked clipboard access.');
+    }
+    document.body.removeChild(ta);
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Boot
+   * ------------------------------------------------------------------ */
+  addSceneBtn.addEventListener('click', addScene);
+  copySceneBtn.addEventListener('click', copyScene);
+
+  load();
+  render();
+})();
+</script>
+
+</body>
+</html>
