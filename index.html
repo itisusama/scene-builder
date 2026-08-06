@@ -62,12 +62,39 @@
     margin-left: auto;
   }
 
+  /* ---------- View tabs ---------- */
+  .nav-tabs { display: flex; gap: 4px; margin-left: 20px; }
+
+  .nav-tab {
+    font-family: var(--font);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .nav-tab:hover { background: var(--bg-hover); color: var(--text); }
+
+  .nav-tab.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: rgba(122, 162, 247, 0.25);
+  }
+
   /* ---------- Layout ---------- */
   .app {
     display: flex;
     flex: 1;
     min-height: 0;
   }
+
+  .app[hidden] { display: none; }
 
   /* ---------- Sidebar ---------- */
   .sidebar {
@@ -267,7 +294,7 @@
     margin-bottom: 6px;
   }
 
-  #sceneNameInput {
+  #sceneNameInput, #storyTitleInput {
     flex: 1;
     min-width: 0;
     background: transparent;
@@ -281,11 +308,75 @@
     transition: border-color 0.15s, background 0.15s;
   }
 
-  #sceneNameInput:hover { border-color: var(--border); }
-  #sceneNameInput:focus {
+  #sceneNameInput:hover, #storyTitleInput:hover { border-color: var(--border); }
+  #sceneNameInput:focus, #storyTitleInput:focus {
     outline: none;
     border-color: var(--accent);
     background: var(--bg-panel);
+  }
+
+  /* ---------- Story assembler ---------- */
+  .seq-index {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    padding-top: 9px;
+    width: 22px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .seq-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--text);
+    padding: 6px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .seq-title.seq-missing { color: var(--danger); font-style: italic; }
+
+  .seq-count {
+    font-size: 11px;
+    color: var(--text-faint);
+    background: var(--bg-panel-2);
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+
+  .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .scene-chip {
+    font-family: var(--font);
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .scene-chip:hover {
+    border-color: rgba(122, 162, 247, 0.4);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .empty-chips {
+    font-size: 13px;
+    color: var(--text-faint);
+    line-height: 1.5;
   }
 
   .section-label {
@@ -455,7 +546,7 @@
     padding: 6px 20px 24px;
   }
 
-  #previewContent {
+  #previewContent, #storyPreviewContent {
     font-family: var(--mono);
     font-size: 13px;
     line-height: 1.7;
@@ -526,10 +617,14 @@
 
 <header>
   <h1><span class="logo">&#9998;</span>Scene Builder</h1>
+  <nav class="nav-tabs" aria-label="Views">
+    <button class="nav-tab" id="tabBuilder" type="button">Scene Builder</button>
+    <button class="nav-tab" id="tabAssembler" type="button">Story Assembler</button>
+  </nav>
   <span class="tagline">Plan your scenes, one beat at a time</span>
 </header>
 
-<div class="app">
+<div class="app" id="builderView">
 
   <aside class="sidebar">
     <div class="sidebar-head">
@@ -574,6 +669,38 @@
   </main>
 </div>
 
+<div class="app" id="assemblerView" hidden>
+
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span>Stories</span>
+      <button class="btn btn-accent btn-sm" id="addStoryBtn" title="Create a new story document">+ New</button>
+    </div>
+    <ul class="scene-list" id="storyList"></ul>
+  </aside>
+
+  <main class="editor">
+
+    <section class="workspace" id="storyWorkspace">
+      <!-- Filled by renderStoryWorkspace() -->
+    </section>
+
+    <section class="preview" id="storyPreviewPane">
+      <div class="preview-head">
+        <span>Story Preview</span>
+        <div class="preview-actions">
+          <button class="btn btn-sm" id="copyStoryBtn" title="Copy the full assembled story as markdown">&#128203; Copy Full Story</button>
+          <button class="btn btn-sm" id="downloadStoryBtn" title="Download the assembled story as a .md file">&#11015; Download (.md)</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div id="storyPreviewContent"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -588,7 +715,10 @@
   let state = {
     scenes: [],       // [{ id, name, requirements: [{ id, text }] }]
     characters: [],   // [{ id, tag, name }] — {tag} / [tag] in text resolves to name
-    selectedId: null
+    stories: [],      // [{ id, title, entries: [{ id, sceneId }] }]
+    selectedId: null,
+    selectedStoryId: null,
+    view: 'builder'   // 'builder' | 'assembler'
   };
 
   function uid() {
@@ -623,13 +753,31 @@
                 };
               })
           : [];
+        state.stories = Array.isArray(parsed.stories)
+          ? parsed.stories.filter(function (st) { return st && typeof st.id === 'string'; })
+              .map(function (st) {
+                return {
+                  id: st.id,
+                  title: typeof st.title === 'string' ? st.title : 'Untitled Story',
+                  entries: Array.isArray(st.entries)
+                    ? st.entries.filter(function (e) {
+                        return e && typeof e.id === 'string' && typeof e.sceneId === 'string';
+                      }).map(function (e) { return { id: e.id, sceneId: e.sceneId }; })
+                    : []
+                };
+              })
+          : [];
         state.selectedId = parsed.selectedId || null;
+        state.selectedStoryId = parsed.selectedStoryId || null;
+        state.view = parsed.view === 'assembler' ? 'assembler' : 'builder';
       }
     } catch (e) {
       console.warn('Scene Builder: could not load saved data.', e);
     }
     if (state.selectedId && !getScene(state.selectedId)) state.selectedId = null;
     if (!state.selectedId && state.scenes.length) state.selectedId = state.scenes[0].id;
+    if (state.selectedStoryId && !getStory(state.selectedStoryId)) state.selectedStoryId = null;
+    if (!state.selectedStoryId && state.stories.length) state.selectedStoryId = state.stories[0].id;
   }
 
   function save() {
@@ -648,6 +796,14 @@
     return getScene(state.selectedId);
   }
 
+  function getStory(id) {
+    return state.stories.find(function (st) { return st.id === id; }) || null;
+  }
+
+  function currentStory() {
+    return getStory(state.selectedStoryId);
+  }
+
   /* ------------------------------------------------------------------ *
    *  DOM refs
    * ------------------------------------------------------------------ */
@@ -662,6 +818,17 @@
   const addCharBtn    = document.getElementById('addCharBtn');
   const downloadSceneBtn = document.getElementById('downloadSceneBtn');
   const downloadAllBtn   = document.getElementById('downloadAllBtn');
+  const builderView   = document.getElementById('builderView');
+  const assemblerView = document.getElementById('assemblerView');
+  const tabBuilder    = document.getElementById('tabBuilder');
+  const tabAssembler  = document.getElementById('tabAssembler');
+  const storyListEl   = document.getElementById('storyList');
+  const storyWorkspaceEl = document.getElementById('storyWorkspace');
+  const storyPreviewPane = document.getElementById('storyPreviewPane');
+  const storyPreviewEl   = document.getElementById('storyPreviewContent');
+  const addStoryBtn      = document.getElementById('addStoryBtn');
+  const copyStoryBtn     = document.getElementById('copyStoryBtn');
+  const downloadStoryBtn = document.getElementById('downloadStoryBtn');
 
   /* ------------------------------------------------------------------ *
    *  Rendering
@@ -671,6 +838,19 @@
     renderWorkspace();
     renderCharacters();
     renderPreview();
+    renderStoryList();
+    renderStoryWorkspace();
+    renderStoryPreview();
+  }
+
+  function setView(view) {
+    state.view = view;
+    builderView.hidden = view !== 'builder';
+    assemblerView.hidden = view !== 'assembler';
+    tabBuilder.classList.toggle('active', view === 'builder');
+    tabAssembler.classList.toggle('active', view === 'assembler');
+    save();
+    render();
   }
 
   function renderSceneList() {
@@ -1030,6 +1210,350 @@
   }
 
   /* ------------------------------------------------------------------ *
+   *  Story assembler
+   * ------------------------------------------------------------------ */
+  const storyDrag = { id: null };
+
+  function renderStoryList() {
+    storyListEl.innerHTML = '';
+
+    if (!state.stories.length) {
+      const li = document.createElement('li');
+      li.className = 'empty-scenes';
+      li.textContent = 'No stories yet. Click "+ New" to start assembling scenes into a document.';
+      storyListEl.appendChild(li);
+      return;
+    }
+
+    state.stories.forEach(function (story) {
+      const li = document.createElement('li');
+      li.className = 'scene-item' + (story.id === state.selectedStoryId ? ' active' : '');
+
+      const title = document.createElement('span');
+      title.className = 'scene-title';
+      title.textContent = story.title || 'Untitled Story';
+
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = story.entries.length;
+      count.title = story.entries.length + ' scene(s) plugged in';
+
+      li.appendChild(title);
+      li.appendChild(count);
+
+      li.addEventListener('click', function () {
+        state.selectedStoryId = story.id;
+        save();
+        render();
+      });
+
+      storyListEl.appendChild(li);
+    });
+  }
+
+  function renderStoryWorkspace() {
+    const story = currentStory();
+    storyWorkspaceEl.innerHTML = '';
+
+    if (!story) {
+      storyPreviewPane.style.display = 'none';
+      const ph = document.createElement('div');
+      ph.className = 'placeholder';
+      ph.innerHTML =
+        '<div class="big">&#128218;</div>' +
+        '<p>Select a story from the sidebar, or create one to start sequencing your scenes into a full document.</p>';
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-accent';
+      btn.textContent = '+ Create your first story';
+      btn.addEventListener('click', addStory);
+      ph.appendChild(btn);
+      storyWorkspaceEl.appendChild(ph);
+      return;
+    }
+
+    storyPreviewPane.style.display = '';
+
+    // --- Story title row ---
+    const titleRow = document.createElement('div');
+    titleRow.className = 'scene-name-row';
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.id = 'storyTitleInput';
+    titleInput.value = story.title;
+    titleInput.placeholder = 'Story title…';
+    titleInput.setAttribute('aria-label', 'Story title');
+    titleInput.addEventListener('input', function () {
+      story.title = titleInput.value;
+      save();
+      renderStoryList();
+      renderStoryPreview();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger-ghost btn-sm';
+    deleteBtn.innerHTML = '&#128465; Delete';
+    deleteBtn.title = 'Delete this story (scenes themselves are kept)';
+    deleteBtn.addEventListener('click', function () {
+      deleteStory(story.id);
+    });
+
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(deleteBtn);
+    storyWorkspaceEl.appendChild(titleRow);
+
+    // --- Sequence ---
+    const seqLabel = document.createElement('div');
+    seqLabel.className = 'section-label';
+    seqLabel.textContent = 'Story Sequence';
+    storyWorkspaceEl.appendChild(seqLabel);
+
+    const list = document.createElement('ul');
+    list.className = 'req-list';
+
+    if (!story.entries.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty-reqs';
+      empty.textContent = 'No scenes plugged in yet — insert scenes from the library below, then drag to reorder.';
+      list.appendChild(empty);
+    } else {
+      story.entries.forEach(function (entry, idx) {
+        list.appendChild(buildSeqItem(story, entry, idx));
+      });
+    }
+
+    storyWorkspaceEl.appendChild(list);
+
+    // --- Scene library chips ---
+    const libLabel = document.createElement('div');
+    libLabel.className = 'section-label';
+    libLabel.textContent = 'Insert Scene';
+    storyWorkspaceEl.appendChild(libLabel);
+
+    const chips = document.createElement('div');
+    chips.className = 'chip-wrap';
+
+    if (!state.scenes.length) {
+      const msg = document.createElement('span');
+      msg.className = 'empty-chips';
+      msg.textContent = 'No scenes available yet — create some in the Scene Builder tab first.';
+      chips.appendChild(msg);
+    } else {
+      state.scenes.forEach(function (scene) {
+        const chip = document.createElement('button');
+        chip.className = 'scene-chip';
+        const label = resolvePlaceholders(scene.name || 'Untitled Scene');
+        chip.textContent = '+ ' + label;
+        chip.title = 'Append "' + label + '" to the story sequence';
+        chip.addEventListener('click', function () {
+          story.entries.push({ id: uid(), sceneId: scene.id });
+          save();
+          renderStoryList();
+          renderStoryWorkspace();
+          renderStoryPreview();
+        });
+        chips.appendChild(chip);
+      });
+    }
+
+    storyWorkspaceEl.appendChild(chips);
+  }
+
+  function buildSeqItem(story, entry, idx) {
+    const scene = getScene(entry.sceneId);
+
+    const li = document.createElement('li');
+    li.className = 'req-item';
+    li.dataset.entryId = entry.id;
+
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.innerHTML = '&#8942;&#8942;';
+    handle.title = 'Drag to reorder';
+    handle.setAttribute('aria-label', 'Drag to reorder scene');
+    handle.addEventListener('mousedown', function () { li.draggable = true; });
+    handle.addEventListener('touchstart', function () { li.draggable = true; }, { passive: true });
+
+    const index = document.createElement('span');
+    index.className = 'seq-index';
+    index.textContent = (idx + 1) + '.';
+
+    const title = document.createElement('span');
+    title.className = 'seq-title' + (scene ? '' : ' seq-missing');
+    title.textContent = scene
+      ? (resolvePlaceholders(scene.name) || 'Untitled Scene')
+      : '(deleted scene)';
+
+    const count = document.createElement('span');
+    count.className = 'seq-count';
+    count.textContent = scene ? scene.requirements.length + ' req' : '—';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'req-remove';
+    removeBtn.innerHTML = '&#10005;';
+    removeBtn.title = 'Remove from story (the scene itself is kept)';
+    removeBtn.setAttribute('aria-label', 'Remove scene from story');
+    removeBtn.addEventListener('click', function () {
+      story.entries = story.entries.filter(function (e) { return e.id !== entry.id; });
+      save();
+      renderStoryList();
+      renderStoryWorkspace();
+      renderStoryPreview();
+    });
+
+    li.appendChild(handle);
+    li.appendChild(index);
+    li.appendChild(title);
+    li.appendChild(count);
+    li.appendChild(removeBtn);
+
+    li.addEventListener('dragstart', function (e) {
+      storyDrag.id = entry.id;
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', entry.id); } catch (_) {}
+    });
+
+    li.addEventListener('dragend', function () {
+      li.classList.remove('dragging');
+      li.draggable = false;
+      storyDrag.id = null;
+      clearDropMarkers();
+    });
+
+    li.addEventListener('dragover', function (e) {
+      if (!storyDrag.id || storyDrag.id === entry.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      clearDropMarkers();
+      li.classList.add(before ? 'drag-over-top' : 'drag-over-bottom');
+    });
+
+    li.addEventListener('dragleave', function (e) {
+      if (!li.contains(e.relatedTarget)) {
+        li.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
+    });
+
+    li.addEventListener('drop', function (e) {
+      if (!storyDrag.id || storyDrag.id === entry.id) return;
+      e.preventDefault();
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      moveEntry(story, storyDrag.id, entry.id, before);
+    });
+
+    return li;
+  }
+
+  function moveEntry(story, draggedId, targetId, before) {
+    const entries = story.entries;
+    const fromIdx = entries.findIndex(function (e) { return e.id === draggedId; });
+    if (fromIdx === -1) return;
+    const dragged = entries.splice(fromIdx, 1)[0];
+    let toIdx = entries.findIndex(function (e) { return e.id === targetId; });
+    if (toIdx === -1) { entries.splice(fromIdx, 0, dragged); return; }
+    if (!before) toIdx += 1;
+    entries.splice(toIdx, 0, dragged);
+    save();
+    renderStoryWorkspace();
+    renderStoryPreview();
+  }
+
+  function addStory() {
+    const story = {
+      id: uid(),
+      title: 'Story ' + (state.stories.length + 1),
+      entries: []
+    };
+    state.stories.push(story);
+    state.selectedStoryId = story.id;
+    save();
+    render();
+    const input = document.getElementById('storyTitleInput');
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function deleteStory(id) {
+    const story = getStory(id);
+    if (!story) return;
+    const label = story.title || 'Untitled Story';
+    if (!confirm('Delete story "' + label + '"? The scenes it references are kept.')) return;
+    state.stories = state.stories.filter(function (st) { return st.id !== id; });
+    if (state.selectedStoryId === id) {
+      state.selectedStoryId = state.stories.length ? state.stories[0].id : null;
+    }
+    save();
+    render();
+  }
+
+  function compileStory(story) {
+    const title = resolvePlaceholders((story.title || '').trim());
+    const parts = story.entries
+      .map(function (e) { return getScene(e.sceneId); })
+      .filter(Boolean)
+      .map(function (s) { return compileScene(s, '## '); })
+      .filter(Boolean);
+    const lines = [];
+    if (title) lines.push('# ' + title);
+    if (parts.length) {
+      if (lines.length) lines.push('');
+      lines.push(parts.join('\n\n'));
+    }
+    return lines.join('\n');
+  }
+
+  function renderStoryPreview() {
+    const story = currentStory();
+    if (!story) {
+      storyPreviewEl.textContent = '';
+      return;
+    }
+    storyPreviewEl.textContent = compileStory(story) ||
+      '(empty story — give it a title and plug in some scenes)';
+  }
+
+  function copyStory() {
+    const story = currentStory();
+    if (!story) return;
+    const text = compileStory(story);
+    if (!text) {
+      showToast('Nothing to copy — the story is empty.');
+      return;
+    }
+
+    function done() {
+      copyStoryBtn.classList.add('copied');
+      copyStoryBtn.innerHTML = '&#10003; Copied!';
+      showToast('Full story copied to clipboard');
+      setTimeout(function () {
+        copyStoryBtn.classList.remove('copied');
+        copyStoryBtn.innerHTML = '&#128203; Copy Full Story';
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { legacyCopy(text, done); });
+    } else {
+      legacyCopy(text, done);
+    }
+  }
+
+  function downloadStory() {
+    const story = currentStory();
+    if (!story) return;
+    const text = compileStory(story);
+    if (!text) {
+      showToast('Nothing to download — the story is empty.');
+      return;
+    }
+    downloadFile(slugify(resolvePlaceholders(story.title)) + '.md', text + '\n');
+    showToast('Story downloaded as .md');
+  }
+
+  /* ------------------------------------------------------------------ *
    *  Actions
    * ------------------------------------------------------------------ */
   function addScene() {
@@ -1052,6 +1576,10 @@
     const label = scene.name || 'Untitled Scene';
     if (!confirm('Delete scene "' + label + '" and all its requirements?')) return;
     state.scenes = state.scenes.filter(function (s) { return s.id !== id; });
+    // Drop the scene from any story sequences that reference it.
+    state.stories.forEach(function (st) {
+      st.entries = st.entries.filter(function (e) { return e.sceneId !== id; });
+    });
     if (state.selectedId === id) {
       state.selectedId = state.scenes.length ? state.scenes[0].id : null;
     }
@@ -1088,10 +1616,11 @@
   /* ------------------------------------------------------------------ *
    *  Export / copy
    * ------------------------------------------------------------------ */
-  function compileScene(scene) {
+  function compileScene(scene, heading) {
+    heading = heading || '# ';
     const name = resolvePlaceholders((scene.name || '').trim());
     const lines = [];
-    if (name) lines.push('# ' + name);
+    if (name) lines.push(heading + name);
     const reqs = scene.requirements
       .map(function (r) { return resolvePlaceholders(r.text).trim(); })
       .filter(Boolean);
@@ -1209,9 +1738,14 @@
   addCharBtn.addEventListener('click', addCharacter);
   downloadSceneBtn.addEventListener('click', downloadScene);
   downloadAllBtn.addEventListener('click', downloadAllScenes);
+  addStoryBtn.addEventListener('click', addStory);
+  copyStoryBtn.addEventListener('click', copyStory);
+  downloadStoryBtn.addEventListener('click', downloadStory);
+  tabBuilder.addEventListener('click', function () { setView('builder'); });
+  tabAssembler.addEventListener('click', function () { setView('assembler'); });
 
   load();
-  render();
+  setView(state.view);
 })();
 </script>
 
