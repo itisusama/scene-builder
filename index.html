@@ -560,6 +560,128 @@
     min-height: 120px;
   }
 
+  /* ---------- Import modal ---------- */
+  #importBtn { margin-left: 12px; }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 16px;
+  }
+
+  .modal-overlay[hidden] { display: none; }
+
+  .modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: min(560px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 22px 24px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  .modal h2 { font-size: 16px; margin-bottom: 6px; }
+
+  .modal-sub {
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-bottom: 14px;
+    line-height: 1.6;
+  }
+
+  .modal-sub code {
+    background: var(--bg-panel-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--accent);
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.5;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .drop-zone.has-file { border-color: rgba(158, 206, 106, 0.5); color: var(--success); }
+
+  #importText {
+    width: 100%;
+    min-height: 140px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    padding: 12px;
+    resize: vertical;
+  }
+
+  #importText:focus { outline: none; border-color: var(--accent); }
+
+  .import-modes {
+    display: flex;
+    gap: 18px;
+    margin: 14px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .import-modes label {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .import-modes input[type="radio"] { accent-color: var(--accent); }
+
+  .import-error {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid rgba(247, 118, 142, 0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .import-error[hidden] { display: none; }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 640px) {
+    #importBtn { margin-left: auto; }
+  }
+
   /* ---------- Scrollbars ---------- */
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -622,6 +744,7 @@
     <button class="nav-tab" id="tabAssembler" type="button">Story Assembler</button>
   </nav>
   <span class="tagline">Plan your scenes, one beat at a time</span>
+  <button class="btn btn-sm" id="importBtn" type="button" title="Import scenes, stories and characters from markdown">&#11014; Import</button>
 </header>
 
 <div class="app" id="builderView">
@@ -699,6 +822,38 @@
     </section>
 
   </main>
+</div>
+
+<div class="modal-overlay" id="importModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+    <h2 id="importModalTitle">Import Story / Scenes</h2>
+    <p class="modal-sub">
+      Upload a <code>.md</code> file or paste markdown below. Headings (<code>#</code> / <code>##</code>)
+      become scenes — a top-level <code>#</code> heading above <code>##</code> headings becomes a story
+      document with those scenes plugged in. Bullets (<code>-</code> / <code>*</code>) become requirements,
+      and tags like <code>{Male: Julian}</code> or <code>[Female Character: Maya]</code> auto-create
+      character slots.
+    </p>
+
+    <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Drop a markdown file or click to browse">
+      <span id="dropZoneLabel">Drag &amp; drop a .md file here, or <u>click to browse</u></span>
+    </div>
+    <input type="file" id="importFile" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+
+    <textarea id="importText" placeholder="…or paste markdown text here" aria-label="Markdown text to import"></textarea>
+
+    <div class="import-modes" role="radiogroup" aria-label="Import mode">
+      <label><input type="radio" name="importMode" value="append" checked> Append to existing</label>
+      <label><input type="radio" name="importMode" value="replace"> Replace everything</label>
+    </div>
+
+    <div class="import-error" id="importError" hidden></div>
+
+    <div class="modal-actions">
+      <button class="btn" id="importCancelBtn" type="button">Cancel</button>
+      <button class="btn btn-accent" id="importConfirmBtn" type="button">Import</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -1729,6 +1884,273 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
   }
+
+  /* ------------------------------------------------------------------ *
+   *  Markdown import
+   * ------------------------------------------------------------------ */
+  const importModal      = document.getElementById('importModal');
+  const importBtn        = document.getElementById('importBtn');
+  const dropZone         = document.getElementById('dropZone');
+  const dropZoneLabel    = document.getElementById('dropZoneLabel');
+  const importFileInput  = document.getElementById('importFile');
+  const importTextEl     = document.getElementById('importText');
+  const importErrorEl    = document.getElementById('importError');
+  const importCancelBtn  = document.getElementById('importCancelBtn');
+  const importConfirmBtn = document.getElementById('importConfirmBtn');
+
+  let importFileText = null;
+
+  // Parses markdown into { scenes, stories, characters } or { error }.
+  // Headings start scenes; when a level-1 heading sits above level-2+
+  // headings it is treated as a story document instead. Bullets become
+  // requirements; "{Tag: Name}" / "[Tag: Name]" declares a character and
+  // collapses to "{Tag}" in the text so the template link is kept.
+  function parseMarkdownImport(text) {
+    const lines = text.split(/\r\n?|\n/);
+    const headingRe = /^(#{1,6})\s+(.*)$/;
+    const bulletRe = /^\s*[-*]\s+(.*)$/;
+    const hrRe = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
+
+    const depths = [];
+    lines.forEach(function (l) {
+      const m = l.match(headingRe);
+      if (m) depths.push(m[1].length);
+    });
+    if (!depths.length) {
+      return { error: 'No headings found. Each scene needs a heading line such as "# Scene Name" or "## Scene Name".' };
+    }
+    // Story mode: the document mixes level-1 and deeper headings, so a
+    // level-1 heading is a story title and deeper headings are its scenes.
+    const storyMode = depths.indexOf(1) !== -1 && depths.some(function (d) { return d > 1; });
+
+    const out = { scenes: [], stories: [], characters: [] };
+    let curScene = null;
+    let curStory = null;
+    let lastReq = null;
+    let lastWasPlain = false;
+
+    const charDeclRe = /([{\[])\s*([^{}\[\]:]+?)\s*:\s*([^{}\[\]]+?)\s*([}\]])/g;
+    function extractChars(s) {
+      return s.replace(charDeclRe, function (m, open, tag, name, close) {
+        tag = tag.trim();
+        name = name.trim();
+        if (tag) {
+          const existing = out.characters.find(function (c) {
+            return c.tag.toLowerCase() === tag.toLowerCase();
+          });
+          if (existing) {
+            if (!existing.name && name) existing.name = name;
+          } else {
+            out.characters.push({ tag: tag, name: name });
+          }
+        }
+        return open + tag + close;
+      });
+    }
+
+    lines.forEach(function (raw) {
+      const hm = raw.match(headingRe);
+      if (hm) {
+        const title = extractChars(hm[2].trim());
+        if (storyMode && hm[1].length === 1) {
+          curStory = { title: title, sceneIdxs: [] };
+          out.stories.push(curStory);
+          curScene = null;
+        } else {
+          curScene = { name: title, reqs: [] };
+          out.scenes.push(curScene);
+          if (storyMode && curStory) curStory.sceneIdxs.push(out.scenes.length - 1);
+        }
+        lastReq = null;
+        lastWasPlain = false;
+        return;
+      }
+
+      if (hrRe.test(raw)) { lastReq = null; lastWasPlain = false; return; }
+
+      const bm = raw.match(bulletRe);
+      if (bm) {
+        if (!curScene) return;
+        lastReq = { text: extractChars(bm[1].trim()) };
+        curScene.reqs.push(lastReq);
+        lastWasPlain = false;
+        return;
+      }
+
+      const trimmed = raw.trim();
+      if (!trimmed) { lastReq = null; lastWasPlain = false; return; }
+      if (!curScene) return;
+
+      const content = extractChars(trimmed);
+      if (lastReq && !lastWasPlain && /^\s{2,}/.test(raw)) {
+        // Indented continuation of a multi-line bullet.
+        lastReq.text += '\n' + content;
+      } else if (lastReq && lastWasPlain) {
+        // Consecutive plain-text lines merge into one requirement.
+        lastReq.text += ' ' + content;
+      } else {
+        // A plain paragraph becomes its own requirement so no text is lost.
+        lastReq = { text: content };
+        curScene.reqs.push(lastReq);
+        lastWasPlain = true;
+      }
+    });
+
+    if (!out.scenes.length) {
+      return { error: 'Headings were found, but no scenes could be built from them. Check that scene headings use "#" or "##".' };
+    }
+    return out;
+  }
+
+  function applyImport(parsed, mode) {
+    if (mode === 'replace') {
+      state.scenes = [];
+      state.stories = [];
+      state.characters = [];
+      state.selectedId = null;
+      state.selectedStoryId = null;
+    }
+
+    parsed.characters.forEach(function (pc) {
+      const existing = state.characters.find(function (c) {
+        return (c.tag || '').trim().toLowerCase() === pc.tag.toLowerCase();
+      });
+      if (existing) {
+        if (!(existing.name || '').trim() && pc.name) existing.name = pc.name;
+      } else {
+        state.characters.push({ id: uid(), tag: pc.tag, name: pc.name });
+      }
+    });
+
+    const sceneIds = parsed.scenes.map(function (ps) {
+      const scene = {
+        id: uid(),
+        name: ps.name || 'Untitled Scene',
+        requirements: ps.reqs.map(function (r) { return { id: uid(), text: r.text }; })
+      };
+      state.scenes.push(scene);
+      return scene.id;
+    });
+
+    const storyIds = parsed.stories.map(function (pst) {
+      const story = {
+        id: uid(),
+        title: pst.title || 'Untitled Story',
+        entries: pst.sceneIdxs.map(function (i) { return { id: uid(), sceneId: sceneIds[i] }; })
+      };
+      state.stories.push(story);
+      return story.id;
+    });
+
+    if (sceneIds.length) state.selectedId = sceneIds[0];
+    if (storyIds.length) state.selectedStoryId = storyIds[0];
+    if (!state.selectedStoryId && state.stories.length) state.selectedStoryId = state.stories[0].id;
+
+    save();
+    render();
+  }
+
+  function showImportError(msg) {
+    importErrorEl.textContent = msg;
+    importErrorEl.hidden = false;
+  }
+
+  function resetDropZone() {
+    importFileText = null;
+    dropZone.classList.remove('has-file', 'drag-over');
+    dropZoneLabel.innerHTML = 'Drag &amp; drop a .md file here, or <u>click to browse</u>';
+  }
+
+  function openImportModal() {
+    resetDropZone();
+    importTextEl.value = '';
+    importErrorEl.hidden = true;
+    importFileInput.value = '';
+    const appendRadio = document.querySelector('input[name="importMode"][value="append"]');
+    if (appendRadio) appendRadio.checked = true;
+    importModal.hidden = false;
+  }
+
+  function closeImportModal() {
+    importModal.hidden = true;
+  }
+
+  function loadImportFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      importFileText = String(reader.result);
+      importErrorEl.hidden = true;
+      dropZone.classList.add('has-file');
+      dropZoneLabel.textContent = '\u{1F4C4} ' + file.name + ' loaded — ready to import';
+    };
+    reader.onerror = function () {
+      resetDropZone();
+      showImportError('Could not read "' + file.name + '" — try pasting its contents instead.');
+    };
+    reader.readAsText(file);
+  }
+
+  function runImport() {
+    // A loaded file wins over pasted text; fall back to the textarea.
+    const text = importFileText !== null ? importFileText : importTextEl.value;
+    if (!text.trim()) {
+      showImportError('Nothing to import — upload a .md file or paste markdown first.');
+      return;
+    }
+    const parsed = parseMarkdownImport(text);
+    if (parsed.error) {
+      showImportError(parsed.error);
+      return;
+    }
+    const modeInput = document.querySelector('input[name="importMode"]:checked');
+    const mode = modeInput ? modeInput.value : 'append';
+    if (mode === 'replace' &&
+        !confirm('Replace ALL existing scenes, stories and characters with the imported content? This cannot be undone.')) {
+      return;
+    }
+    applyImport(parsed, mode);
+    closeImportModal();
+    const reqCount = parsed.scenes.reduce(function (n, s) { return n + s.reqs.length; }, 0);
+    let summary = 'Imported ' + parsed.scenes.length + ' scene(s), ' + reqCount + ' requirement(s)';
+    if (parsed.characters.length) summary += ', ' + parsed.characters.length + ' character(s)';
+    if (parsed.stories.length) summary += ', ' + parsed.stories.length + ' story(ies)';
+    showToast(summary);
+  }
+
+  importBtn.addEventListener('click', openImportModal);
+  importCancelBtn.addEventListener('click', closeImportModal);
+  importConfirmBtn.addEventListener('click', runImport);
+  importModal.addEventListener('click', function (e) {
+    if (e.target === importModal) closeImportModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !importModal.hidden) closeImportModal();
+  });
+
+  dropZone.addEventListener('click', function () { importFileInput.click(); });
+  dropZone.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); importFileInput.click(); }
+  });
+  importFileInput.addEventListener('change', function () {
+    loadImportFile(importFileInput.files[0]);
+  });
+  ['dragenter', 'dragover'].forEach(function (type) {
+    dropZone.addEventListener(type, function (e) {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+  });
+  dropZone.addEventListener('dragleave', function (e) {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      loadImportFile(e.dataTransfer.files[0]);
+    }
+  });
 
   /* ------------------------------------------------------------------ *
    *  Boot
